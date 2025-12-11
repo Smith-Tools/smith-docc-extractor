@@ -140,8 +140,31 @@ public class DocCJSONFetcher {
 
         // Ensure documentation/ prefix for standard DocC sites
         // Note: Some static sites might not use "documentation/", but it's the standard default
-        if !normalized.hasPrefix("documentation/") && !normalized.hasPrefix("tutorials/") {
-            normalized = "documentation/\(normalized)"
+        // Detect Apple Developer domains for special routing
+        if baseURL.contains("developer.apple.com") {
+             if !normalized.contains("tutorials/data/documentation") {
+                 // Convert standard "documentation/foo" -> "tutorials/data/documentation/foo"
+                 if normalized.hasPrefix("documentation/") {
+                     normalized = "tutorials/data/" + normalized
+                 } else {
+                     normalized = "tutorials/data/documentation/" + normalized
+                 }
+             }
+        } else {
+            // Standard DocC (SwiftPackageIndex, static hosting, etc) usually uses data/documentation
+            // or just documentation/..json depending on hosting. 
+            // Most modern dynamic DocC uses /data/documentation/
+            
+            // If the path was passed as "documentation/foo", try to convert to data/documentation/foo 
+            // IF we suspect it's a dynamic host. But let's be conservative:
+            // If it doesn't have "data/" or "documentation/", add "documentation/"
+            
+            if !normalized.contains("/documentation/") && 
+               !normalized.contains("/tutorials/") && 
+               !normalized.hasPrefix("documentation/") && 
+               !normalized.hasPrefix("tutorials/") {
+                normalized = "documentation/\(normalized)"
+            }
         }
 
         return normalized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))

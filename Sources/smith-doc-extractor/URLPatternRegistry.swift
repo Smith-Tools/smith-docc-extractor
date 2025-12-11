@@ -155,8 +155,20 @@ public struct SwiftPackageIndexHandler: URLPatternHandler {
     
     public func resolveJSONPath(for url: URL) -> String {
         let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let components = path.split(separator: "/")
         
-        // SPI uses /data/documentation/
+        // SPI URL format: swiftpackageindex.com/owner/repo[/documentation/...]
+        // Extract owner/repo and fallback to GitHub repo handler
+        if components.count >= 2 {
+            let owner = String(components[0])
+            let repo = String(components[1])
+            
+            // Redirect to GitHub repo handler for .docc source fallback
+            // (SPI direct doc URLs are behind Cloudflare)
+            return "__github_repo__/\(owner)/\(repo)"
+        }
+        
+        // Fallback to original SPI logic (will likely fail with 403)
         if path.hasPrefix("data/") {
             return path
         }

@@ -59,3 +59,38 @@ print(doc.metadata.title)
 
 - **DocCRenderNode**: The core data model reflecting the JSON schema.
 - **DocCJSONFetcher**: A URLSession-based client handling DocC routing and normalization.
+- **URLPatternRegistry**: Extensible pattern-matching system for URL routing.
+
+## URL Pattern Handlers
+
+The library uses a priority-based pattern registry to route URLs to their correct JSON endpoints. Built-in handlers:
+
+| Handler | Priority | Description |
+|---------|----------|-------------|
+| `apple.hig.toc` | 120 | HIG root page (returns TOC error with guidance) |
+| `apple.hig` | 110 | HIG leaf pages (e.g., `/design/human-interface-guidelines/color`) |
+| `apple.documentation` | 100 | Apple framework docs (e.g., `/documentation/swiftui`) |
+| `apple.tutorials` | 100 | Apple tutorials |
+| `swiftpackageindex` | 100 | Swift Package Index DocC sites |
+| `generic.docc` | 0 | Fallback for any other DocC site |
+
+### Adding Custom Handlers
+
+```swift
+struct MyCustomHandler: URLPatternHandler {
+    let identifier = "my.custom"
+    let priority = 150 // Higher = checked first
+    let responseType = PatternResponseType.renderNode
+    
+    func canHandle(url: URL) -> Bool {
+        return url.host?.contains("mydocs.example.com") == true
+    }
+    
+    func resolveJSONPath(for url: URL) -> String {
+        return "api/docs/\(url.path)"
+    }
+}
+
+// Register at runtime
+URLPatternRegistry.shared.register(MyCustomHandler())
+```

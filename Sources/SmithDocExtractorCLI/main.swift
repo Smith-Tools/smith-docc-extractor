@@ -50,8 +50,6 @@ struct Extract: AsyncParsableCommand {
         
         // bootstrap logging if needed, or rely on print for simple CLI output
         
-        let fetcher = DocCJSONFetcher(baseURL: "") // Empty base for absolute URL handling or heuristic
-        
         // Simple heuristic: if it looks like a full URL, use it directly or parse it.
         // The fetcher needs to be smart enough or we handle it here.
         // DocCJSONFetcher logic assumes a baseURL is set.

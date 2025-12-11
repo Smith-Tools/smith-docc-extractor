@@ -169,6 +169,52 @@ public struct SwiftPackageIndexHandler: URLPatternHandler {
     }
 }
 
+/// GitHub Pages hosted DocC (*.github.io sites with versioned or unversioned docs)
+/// Matches: *.github.io/*/documentation/* or *.github.io/*/version/documentation/*
+/// Pattern: preserves prefix path (repo name, version) and adds /data/ before /documentation/
+public struct GitHubPagesDocCHandler: URLPatternHandler {
+    public let identifier = "github.pages.docc"
+    public let priority = 50 // Above generic but below specific handlers
+    public let responseType = PatternResponseType.renderNode
+    
+    public init() {}
+    
+    public func canHandle(url: URL) -> Bool {
+        return url.host?.hasSuffix(".github.io") == true
+    }
+    
+    public func resolveJSONPath(for url: URL) -> String {
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        
+        // GitHub Pages DocC uses /data/documentation/ pattern
+        // Input: pointfreeco.github.io/swift-composable-architecture/1.22.0/documentation/composablearchitecture
+        // Output: swift-composable-architecture/1.22.0/data/documentation/composablearchitecture
+        
+        // Find where /documentation/ starts
+        if let docRange = path.range(of: "documentation/") {
+            // Insert /data/ before /documentation/
+            let prefix = path[..<docRange.lowerBound]
+            let suffix = path[docRange.lowerBound...]
+            return "\(prefix)data/\(suffix)"
+        }
+        
+        // If path ends with documentation (no trailing slash or content)
+        if path.hasSuffix("/documentation") || path == "documentation" {
+            if let docRange = path.range(of: "documentation") {
+                let prefix = path[..<docRange.lowerBound]
+                let suffix = path[docRange.lowerBound...]
+                return "\(prefix)data/\(suffix)"
+            }
+        }
+        
+        // Fallback: wrap with data/documentation if not present
+        if path.contains("/data/") {
+            return path
+        }
+        return "data/documentation/\(path)"
+    }
+}
+
 /// Generic DocC fallback (any other DocC-hosted site)
 /// Matches: Any URL not handled by specific handlers
 public struct GenericDocCHandler: URLPatternHandler {
@@ -196,6 +242,7 @@ public struct GenericDocCHandler: URLPatternHandler {
         
         return "data/documentation/\(path)"
     }
+
 }
 
 // MARK: - URL Pattern Registry
@@ -212,6 +259,7 @@ public final class URLPatternRegistry: @unchecked Sendable {
         registry.registerInternal(AppleTutorialsHandler())
         registry.registerInternal(AppleDocumentationHandler())
         registry.registerInternal(SwiftPackageIndexHandler())
+        registry.registerInternal(GitHubPagesDocCHandler())
         registry.registerInternal(GenericDocCHandler())
         return registry
     }()

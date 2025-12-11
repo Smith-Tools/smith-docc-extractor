@@ -220,20 +220,49 @@ public class DocCJSONFetcher {
             
             // Try to find main documentation markdown in each .docc directory
             for doccPath in doccPaths {
-                // Look for .md files in the .docc directory
+                // Collect all .md files in this .docc directory (not in subdirs)
+                var mdFiles: [String] = []
                 for item in tree {
                     if let path = item["path"] as? String,
                        let type = item["type"] as? String,
                        type == "blob",
                        path.hasPrefix(doccPath + "/"),
                        path.hasSuffix(".md"),
-                       !path.contains("/Guides/") { // Skip guide subdirectories first
-                        
-                        // Fetch the markdown content
-                        let rawURL = "https://raw.githubusercontent.com/\(owner)/\(repo)/main/\(path)"
-                        if let content = try? await fetchRawContent(from: rawURL) {
-                            return createRenderNodeFromMarkdown(content, owner: owner, repo: repo)
-                        }
+                       !path.contains("/Guides/"),
+                       !path.contains("/Resources/"),
+                       !path.contains("/Articles/") {
+                        mdFiles.append(path)
+                    }
+                }
+                
+                // Extract docc directory name (e.g., "NIO.docc" -> "NIO")
+                let doccName = URL(fileURLWithPath: doccPath).lastPathComponent
+                    .replacingOccurrences(of: ".docc", with: "")
+                
+                // Sort files: prioritize module-named files, then overview, then others
+                let sortedFiles = mdFiles.sorted { file1, file2 in
+                    let name1 = URL(fileURLWithPath: file1).lastPathComponent.lowercased()
+                    let name2 = URL(fileURLWithPath: file2).lastPathComponent.lowercased()
+                    let doccLower = doccName.lowercased()
+                    
+                    // Highest priority: exact module name match
+                    let match1 = name1.hasPrefix(doccLower)
+                    let match2 = name2.hasPrefix(doccLower)
+                    if match1 != match2 { return match1 }
+                    
+                    // Second priority: overview files
+                    let overview1 = name1.contains("overview")
+                    let overview2 = name2.contains("overview")
+                    if overview1 != overview2 { return overview1 }
+                    
+                    return name1 < name2
+                }
+                
+                // Fetch the best matching file
+                if let bestFile = sortedFiles.first {
+                    let rawURL = "https://raw.githubusercontent.com/\(owner)/\(repo)/main/\(bestFile)"
+                    if let content = try? await fetchRawContent(from: rawURL) {
+                        return createRenderNodeFromMarkdown(content, owner: owner, repo: repo)
                     }
                 }
             }

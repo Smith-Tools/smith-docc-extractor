@@ -198,8 +198,8 @@ public struct GitHubRepoHandler: URLPatternHandler {
             return "data/documentation/\(path)"
         }
         
-        let owner = String(components[0]).lowercased()
-        let repo = String(components[1]).lowercased()
+        let owner = String(components[0])
+        let repo = String(components[1])
         
         // The actual fetch will need to redirect to owner.github.io/repo/...
         // For now, construct the expected GitHub Pages path

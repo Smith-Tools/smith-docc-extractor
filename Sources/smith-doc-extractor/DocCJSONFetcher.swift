@@ -178,9 +178,134 @@ public class DocCJSONFetcher {
             }
         }
         
+        // Fallback: Try to fetch .docc source markdown directly from the repo
+        if let docCSource = await fetchDocCSourceFromRepo(owner: owner, repo: repo) {
+            return docCSource
+        }
+        
         // If all paths fail, return a helpful error
         throw FetcherError.notFound
     }
+    
+    /// Fetch .docc source markdown directly from a GitHub repo using API tree search
+    private func fetchDocCSourceFromRepo(owner: String, repo: String) async -> DocCRenderNode? {
+        // Use GitHub API to find .docc directories in the repo tree
+        let apiURL = "https://api.github.com/repos/\(owner)/\(repo)/git/trees/main?recursive=1"
+        
+        guard let url = URL(string: apiURL) else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        request.setValue(userAgentPool.randomElement()!, forHTTPHeaderField: "User-Agent")
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tree = json["tree"] as? [[String: Any]] else {
+                return nil
+            }
+            
+            // Find .docc directories
+            var doccPaths: [String] = []
+            for item in tree {
+                if let path = item["path"] as? String,
+                   let type = item["type"] as? String,
+                   type == "tree",
+                   path.hasSuffix(".docc") {
+                    doccPaths.append(path)
+                }
+            }
+            
+            // Try to find main documentation markdown in each .docc directory
+            for doccPath in doccPaths {
+                // Look for .md files in the .docc directory
+                for item in tree {
+                    if let path = item["path"] as? String,
+                       let type = item["type"] as? String,
+                       type == "blob",
+                       path.hasPrefix(doccPath + "/"),
+                       path.hasSuffix(".md"),
+                       !path.contains("/Guides/") { // Skip guide subdirectories first
+                        
+                        // Fetch the markdown content
+                        let rawURL = "https://raw.githubusercontent.com/\(owner)/\(repo)/main/\(path)"
+                        if let content = try? await fetchRawContent(from: rawURL) {
+                            return createRenderNodeFromMarkdown(content, owner: owner, repo: repo)
+                        }
+                    }
+                }
+            }
+        } catch {
+            return nil
+        }
+        
+        return nil
+    }
+    
+    /// Fetch raw content from a URL
+    private func fetchRawContent(from urlString: String) async throws -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        
+        var request = URLRequest(url: url)
+        request.setValue(userAgentPool.randomElement()!, forHTTPHeaderField: "User-Agent")
+        
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse,
+              httpResponse.statusCode == 200,
+              let content = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        
+        return content
+    }
+
+    
+    /// Convert DocC markdown to a synthetic DocCRenderNode
+    private func createRenderNodeFromMarkdown(_ markdown: String, owner: String, repo: String) -> DocCRenderNode {
+        // Extract title from first # heading
+        let lines = markdown.components(separatedBy: "\n")
+        var title = repo
+        var abstract = ""
+        
+        for line in lines {
+            if line.hasPrefix("# ") {
+                // Extract title, handle ``ModuleName`` format
+                title = String(line.dropFirst(2))
+                    .trimmingCharacters(in: .whitespaces)
+                    .replacingOccurrences(of: "``", with: "")
+                    .replacingOccurrences(of: "`", with: "")
+            } else if !line.isEmpty && abstract.isEmpty && !line.hasPrefix("#") && !line.hasPrefix("-") {
+                abstract = line.trimmingCharacters(in: .whitespaces)
+            }
+            
+            if !title.isEmpty && !abstract.isEmpty {
+                break
+            }
+        }
+        
+        // Create TextFragment for abstract
+        let abstractFragment = TextFragment(type: "text", text: abstract)
+        
+        // Create minimal DocCRenderNode with the extracted content
+        return DocCRenderNode(
+            metadata: DocumentationMetadata(
+                role: "collection",
+                roleHeading: "Package",
+                title: title
+            ),
+            abstract: [abstractFragment],
+            identifier: DocumentationIdentifier(
+                url: "doc://\(owner)/\(repo)",
+                interfaceLanguage: "swift"
+            ),
+            schemaVersion: VersionInfo(major: 0, minor: 1, patch: 0),
+            kind: "article"
+        )
+    }
+
+
     
     /// Fetch recent release versions from GitHub API (for versioned doc fallback)
     private func fetchRecentGitHubReleases(owner: String, repo: String) async -> [String] {

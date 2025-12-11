@@ -86,6 +86,11 @@ public class DocCJSONFetcher {
             )
         }
         
+        // Special handling for GitHub repo URLs that need resolution
+        if jsonPath.hasPrefix("__github_repo__/") {
+            return try await resolveGitHubRepoDocumentation(jsonPath: jsonPath)
+        }
+        
         // Construct final URL
         var finalPath = jsonPath
         if !finalPath.hasSuffix(".json") {
@@ -110,6 +115,120 @@ public class DocCJSONFetcher {
             throw error
         }
     }
+    
+    /// Resolve GitHub repo URL to actual DocC documentation
+    private func resolveGitHubRepoDocumentation(jsonPath: String) async throws -> DocCRenderNode {
+        // Parse __github_repo__/owner/repo
+        let parts = jsonPath.replacingOccurrences(of: "__github_repo__/", with: "").split(separator: "/")
+        guard parts.count >= 2 else {
+            throw FetcherError.invalidURL("Invalid GitHub repo path: \(jsonPath)")
+        }
+        
+        let owner = String(parts[0])
+        let repo = String(parts[1])
+        
+        // Generate potential module names (Swift packages often have different module names)
+        var moduleNames: [String] = []
+        
+        // 1. Repo name without dashes (e.g., swift-composable-architecture -> swiftcomposablearchitecture)
+        moduleNames.append(repo.replacingOccurrences(of: "-", with: "").lowercased())
+        
+        // 2. Repo name with 'swift-' prefix stripped (common pattern)
+        if repo.lowercased().hasPrefix("swift-") {
+            let withoutPrefix = String(repo.dropFirst("swift-".count))
+            moduleNames.append(withoutPrefix.replacingOccurrences(of: "-", with: "").lowercased())
+        }
+        
+        // 3. Just the repo name with dashes (some use it as-is)
+        moduleNames.append(repo.lowercased())
+        
+        let baseGHPages = "https://\(owner).github.io/\(repo)"
+        
+        // Build list of paths to try
+        var pathsToTry: [String] = []
+        
+        // Unversioned paths first (most common for simple projects)
+        for moduleName in moduleNames {
+            pathsToTry.append("\(baseGHPages)/data/documentation/\(moduleName).json")
+        }
+        
+        // Try recent release versions for versioned docs (like TCA)
+        let recentVersions = await fetchRecentGitHubReleases(owner: owner, repo: repo)
+        for version in recentVersions {
+            for moduleName in moduleNames {
+                pathsToTry.append("\(baseGHPages)/\(version)/data/documentation/\(moduleName).json")
+            }
+        }
+
+
+        
+        
+        // Add common fallbacks (main branch and direct paths)
+        for moduleName in moduleNames {
+            pathsToTry.append("\(baseGHPages)/main/data/documentation/\(moduleName).json")
+            pathsToTry.append("\(baseGHPages)/documentation/\(moduleName).json")
+        }
+        pathsToTry.append("\(baseGHPages)/main/data/documentation/\(repo).json")
+        
+        for urlString in pathsToTry {
+            do {
+                return try await performRequest(url: urlString)
+            } catch {
+                continue // Try next path
+            }
+        }
+        
+        // If all paths fail, return a helpful error
+        throw FetcherError.notFound
+    }
+    
+    /// Fetch recent release versions from GitHub API (for versioned doc fallback)
+    private func fetchRecentGitHubReleases(owner: String, repo: String) async -> [String] {
+        let apiURL = "https://api.github.com/repos/\(owner)/\(repo)/releases?per_page=10"
+        
+        guard let url = URL(string: apiURL) else { return [] }
+        
+        var request = URLRequest(url: url)
+        request.setValue("application/vnd.github.v3+json", forHTTPHeaderField: "Accept")
+        request.setValue(userAgentPool.randomElement()!, forHTTPHeaderField: "User-Agent")
+        
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  httpResponse.statusCode == 200 else { return [] }
+            
+            // Parse JSON to extract tag_names
+            if let releases = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+                var versions = Set<String>() // Use set to dedupe
+                
+                for release in releases {
+                    guard let tagName = release["tag_name"] as? String else { continue }
+                    // Remove 'v' prefix if present
+                    var version = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+                    
+                    // Normalize to major.minor.0 (many gh-pages only have major.minor versions)
+                    let components = version.split(separator: ".")
+                    if components.count >= 2 {
+                        version = "\(components[0]).\(components[1]).0"
+                    }
+                    versions.insert(version)
+                }
+                
+                // Sort versions descending (latest first)
+                return versions.sorted { v1, v2 in
+                    v1.compare(v2, options: .numeric) == .orderedDescending
+                }
+            }
+        } catch {
+            return []
+        }
+        
+        return []
+    }
+
+
+
+
     
     /// Get information about which handler would be used for a URL
     public func handlerInfo(for path: String) -> (identifier: String, responseType: PatternResponseType)? {

@@ -169,6 +169,46 @@ public struct SwiftPackageIndexHandler: URLPatternHandler {
     }
 }
 
+/// GitHub Repository URLs (github.com/owner/repo)
+/// Matches: github.com/owner/repo or github.com/owner/repo.git
+/// Redirects to: owner.github.io/repo/data/documentation/repo.json
+public struct GitHubRepoHandler: URLPatternHandler {
+    public let identifier = "github.repo"
+    public let priority = 80 // Above generic, below specific doc handlers
+    public let responseType = PatternResponseType.renderNode
+    
+    public init() {}
+    
+    public func canHandle(url: URL) -> Bool {
+        guard url.host == "github.com" || url.host == "www.github.com" else { return false }
+        // Must have at least /owner/repo in path
+        let components = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .replacingOccurrences(of: ".git", with: "")
+            .split(separator: "/")
+        return components.count >= 2
+    }
+    
+    public func resolveJSONPath(for url: URL) -> String {
+        // Extract owner and repo from github.com/owner/repo
+        let path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            .replacingOccurrences(of: ".git", with: "")
+        let components = path.split(separator: "/")
+        
+        guard components.count >= 2 else {
+            return "data/documentation/\(path)"
+        }
+        
+        let owner = String(components[0]).lowercased()
+        let repo = String(components[1]).lowercased()
+        
+        // The actual fetch will need to redirect to owner.github.io/repo/...
+        // For now, construct the expected GitHub Pages path
+        // The DocCJSONFetcher will need to handle this specially
+        return "__github_repo__/\(owner)/\(repo)"
+    }
+}
+
+
 /// GitHub Pages hosted DocC (*.github.io sites with versioned or unversioned docs)
 /// Matches: *.github.io/*/documentation/* or *.github.io/*/version/documentation/*
 /// Pattern: preserves prefix path (repo name, version) and adds /data/ before /documentation/
@@ -259,6 +299,7 @@ public final class URLPatternRegistry: @unchecked Sendable {
         registry.registerInternal(AppleTutorialsHandler())
         registry.registerInternal(AppleDocumentationHandler())
         registry.registerInternal(SwiftPackageIndexHandler())
+        registry.registerInternal(GitHubRepoHandler())
         registry.registerInternal(GitHubPagesDocCHandler())
         registry.registerInternal(GenericDocCHandler())
         return registry

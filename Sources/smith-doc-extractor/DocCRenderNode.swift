@@ -7,6 +7,7 @@ import Foundation
 // MARK: - Core Data Types
 
 /// Represents a text fragment that can contain different content types
+/// Extended to support rich Apple DocC content: tables, lists, headings with anchors, paragraphs with inlineContent
 public struct TextFragment: Codable, Sendable {
     public let type: String
     public let text: String?
@@ -29,6 +30,22 @@ public struct TextFragment: Codable, Sendable {
     public let returns: Parameter?
     public let thrown: Parameter?
     public let metadata: ContentMetadata?
+    
+    // Rich content support for Apple DocC format
+    public let inlineContent: [TextFragment]?  // For paragraphs and inline content
+    public let anchor: String?                  // For headings and sections
+    public let level: Int?                      // For heading levels (1-6)
+    
+    // Table support
+    public let rows: [[[TextFragment]]]?        // Table rows (row -> cells -> content)
+    public let alignments: [String]?            // Table column alignments
+    public let header: String?                  // Table header type ("row", "column", etc.)
+    
+    // List support
+    public let items: [TermListItem]?           // For unorderedList, orderedList, termList items
+    
+    // Reference support
+    public let isActive: Bool?                  // For active links/references
 
     public init(
         type: String,
@@ -51,7 +68,15 @@ public struct TextFragment: Codable, Sendable {
         parameters: [Parameter]? = nil,
         returns: Parameter? = nil,
         thrown: Parameter? = nil,
-        metadata: ContentMetadata? = nil
+        metadata: ContentMetadata? = nil,
+        inlineContent: [TextFragment]? = nil,
+        anchor: String? = nil,
+        level: Int? = nil,
+        rows: [[[TextFragment]]]? = nil,
+        alignments: [String]? = nil,
+        header: String? = nil,
+        items: [TermListItem]? = nil,
+        isActive: Bool? = nil
     ) {
         self.type = type
         self.text = text
@@ -74,8 +99,49 @@ public struct TextFragment: Codable, Sendable {
         self.returns = returns
         self.thrown = thrown
         self.metadata = metadata
+        self.inlineContent = inlineContent
+        self.anchor = anchor
+        self.level = level
+        self.rows = rows
+        self.alignments = alignments
+        self.header = header
+        self.items = items
+        self.isActive = isActive
     }
 }
+
+/// Represents an item in a list (unorderedList, orderedList, termList)
+/// Uses separate struct to avoid recursive type issues with TextFragment
+public struct TermListItem: Codable, Sendable {
+    public let content: [TextFragment]?         // For regular list items
+    public let term: TermInlineContent?         // For termList: the term being defined
+    public let definition: TermDefinition?      // For termList: the definition
+    
+    public init(content: [TextFragment]? = nil, term: TermInlineContent? = nil, definition: TermDefinition? = nil) {
+        self.content = content
+        self.term = term
+        self.definition = definition
+    }
+}
+
+/// Term content wrapper (avoids recursive TextFragment reference)
+public struct TermInlineContent: Codable, Sendable {
+    public let inlineContent: [TextFragment]?
+    
+    public init(inlineContent: [TextFragment]? = nil) {
+        self.inlineContent = inlineContent
+    }
+}
+
+/// Term definition for termList items
+public struct TermDefinition: Codable, Sendable {
+    public let content: [TextFragment]?
+    
+    public init(content: [TextFragment]? = nil) {
+        self.content = content
+    }
+}
+
 
 /// Represents source code payloads that may be single strings or arrays
 public enum CodeValue: Codable, Sendable {

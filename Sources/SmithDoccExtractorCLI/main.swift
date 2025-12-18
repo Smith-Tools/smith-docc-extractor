@@ -1,24 +1,24 @@
 import ArgumentParser
 import Foundation
 import Logging
-import SmithDocExtractor
+import SmithDoccExtractor
 
 // MARK: - Main CLI
 
 @main
-struct SmithDocExtractorCLI: AsyncParsableCommand {
+struct SmithDoccExtractorCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "smith-doc-extractor",
+        commandName: "smith-docc-extractor",
         abstract: "Extract DocC documentation from URLs, GitHub repos, and local projects",
         discussion: """
-        Smith Doc Extractor fetches and extracts documentation from various sources:
+        Smith Docc Extractor fetches and extracts documentation from various sources:
         
         Examples:
-          smith-doc-extractor docs https://developer.apple.com/documentation/swiftui
-          smith-doc-extractor docs https://github.com/apple/swift-nio
-          smith-doc-extractor docs /path/to/local/project
-          smith-doc-extractor list                    # List project dependencies with doc status
-          smith-doc-extractor examples swift-nio      # Find code examples
+          smith-docc-extractor docs https://developer.apple.com/documentation/swiftui
+          smith-docc-extractor docs https://github.com/apple/swift-nio
+          smith-docc-extractor docs /path/to/local/project
+          smith-docc-extractor list                    # List project dependencies with doc status
+          smith-docc-extractor examples swift-nio      # Find code examples
         """,
         version: "2.0.0",
         subcommands: [Docs.self, List.self, Examples.self],

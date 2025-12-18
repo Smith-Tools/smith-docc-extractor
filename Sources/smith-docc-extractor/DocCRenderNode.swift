@@ -42,7 +42,7 @@ public struct TextFragment: Codable, Sendable {
     public let header: String?                  // Table header type ("row", "column", etc.)
     
     // List support
-    public let items: [TermListItem]?           // For unorderedList, orderedList, termList items
+    public let items: [ListItem]?           // For unorderedList, orderedList, termList items
     
     // Reference support
     public let isActive: Bool?                  // For active links/references
@@ -75,7 +75,7 @@ public struct TextFragment: Codable, Sendable {
         rows: [[[TextFragment]]]? = nil,
         alignments: [String]? = nil,
         header: String? = nil,
-        items: [TermListItem]? = nil,
+        items: [ListItem]? = nil,
         isActive: Bool? = nil
     ) {
         self.type = type
@@ -107,6 +107,30 @@ public struct TextFragment: Codable, Sendable {
         self.header = header
         self.items = items
         self.isActive = isActive
+    }
+}
+
+/// Represents an item in a list.
+/// Can be a simple string (identifier) or a complex object (with content, term, definition).
+public enum ListItem: Codable, Sendable {
+    case string(String)
+    case item(TermListItem)
+    
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let s = try? container.decode(String.self) {
+            self = .string(s)
+        } else {
+            self = .item(try container.decode(TermListItem.self))
+        }
+    }
+    
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try container.encode(s)
+        case .item(let i): try container.encode(i)
+        }
     }
 }
 

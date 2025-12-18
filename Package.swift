@@ -2,17 +2,17 @@
 import PackageDescription
 
 let package = Package(
-    name: "smith-doc-extractor",
+    name: "smith-docc-extractor",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v15)
     ],
     products: [
         .library(
-            name: "SmithDocExtractor",
-            targets: ["SmithDocExtractor"]),
+            name: "SmithDoccExtractor",
+            targets: ["SmithDoccExtractor"]),
         .executable(
-            name: "smith-doc-extractor",
-            targets: ["SmithDocExtractorCLI"]),
+            name: "smith-docc-extractor",
+            targets: ["SmithDoccExtractorCLI"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
@@ -21,20 +21,20 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "SmithDocExtractor",
+            name: "SmithDoccExtractor",
             dependencies: [
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SwiftSoup", package: "SwiftSoup"),
             ],
-            path: "Sources/smith-doc-extractor"
+            path: "Sources/smith-docc-extractor"
         ),
         .testTarget(
-            name: "SmithDocExtractorTests",
-            dependencies: ["SmithDocExtractor"]),
+            name: "SmithDoccExtractorTests",
+            dependencies: ["SmithDoccExtractor"]),
         .executableTarget(
-            name: "SmithDocExtractorCLI",
+            name: "SmithDoccExtractorCLI",
             dependencies: [
-                "SmithDocExtractor",
+                "SmithDoccExtractor",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"), 
                 .product(name: "Logging", package: "swift-log")
             ]

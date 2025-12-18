@@ -1,10 +1,10 @@
-# Smith Doc Extractor
+# Smith DocC Extractor
 
 A generic Swift library and CLI for extracting content from DocC-generated JSON documentation sites.
 
 ## Overview
 
-`smith-doc-extractor` provides tools to fetch, parse, and extract structured data from any website hosted using Apple's DocC (Documentation Compiler). It generalizes the logic previously locked inside specialized tools, making it available for any Swift tooling needs.
+`smith-docc-extractor` provides tools to fetch, parse, and extract structured data from any website hosted using Apple's DocC (Documentation Compiler). It generalizes the logic previously locked inside specialized tools, making it available for any Swift tooling needs.
 
 ## Features
 

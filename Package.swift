@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "smith-docc-extractor",
+    name: "smith-doc-inspector",
     platforms: [
         .macOS(.v15)
     ],
@@ -11,7 +11,7 @@ let package = Package(
             name: "SmithDoccExtractor",
             targets: ["SmithDoccExtractor"]),
         .executable(
-            name: "smith-docc-extractor",
+            name: "smith-doc-inspector",
             targets: ["SmithDoccExtractorCLI"]),
     ],
     dependencies: [
@@ -26,7 +26,7 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "SwiftSoup", package: "SwiftSoup"),
             ],
-            path: "Sources/smith-docc-extractor"
+            path: "Sources/smith-doc-inspector"
         ),
         .testTarget(
             name: "SmithDoccExtractorTests",

@@ -8,17 +8,17 @@ import SmithDoccExtractor
 @main
 struct SmithDoccExtractorCLI: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "smith-docc-extractor",
-        abstract: "Extract DocC documentation from URLs, GitHub repos, and local projects",
+        commandName: "smith-doc-inspector",
+        abstract: "Inspect DocC documentation and repo examples from URLs, GitHub repos, and local projects",
         discussion: """
         Smith Docc Extractor fetches and extracts documentation from various sources:
         
         Examples:
-          smith-docc-extractor docs https://developer.apple.com/documentation/swiftui
-          smith-docc-extractor docs https://github.com/apple/swift-nio
-          smith-docc-extractor docs /path/to/local/project
-          smith-docc-extractor list                    # List project dependencies with doc status
-          smith-docc-extractor examples swift-nio      # Find code examples
+          smith-doc-inspector docs https://developer.apple.com/documentation/swiftui
+          smith-doc-inspector docs https://github.com/apple/swift-nio
+          smith-doc-inspector docs /path/to/local/project
+          smith-doc-inspector list                    # List project dependencies with doc status
+          smith-doc-inspector examples swift-nio      # Find code examples
         """,
         version: "2.0.0",
         subcommands: [Docs.self, List.self, Examples.self],

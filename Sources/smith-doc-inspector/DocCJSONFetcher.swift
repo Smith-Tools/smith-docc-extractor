@@ -6,6 +6,12 @@ import FoundationNetworking
 /// URLSession-based client for accessing generic DocC JSON documentation.
 /// Uses URLPatternRegistry for intelligent URL routing based on known patterns.
 public class DocCJSONFetcher {
+    public struct ResolvedRoute: Sendable {
+        public let sourceURL: String
+        public let jsonURL: String
+        public let handlerIdentifier: String
+        public let responseType: PatternResponseType
+    }
 
     // MARK: - Properties
 
@@ -61,25 +67,10 @@ public class DocCJSONFetcher {
 
     /// Fetch documentation using the pattern registry for URL routing
     public func fetchDocumentation(path: String) async throws -> DocCRenderNode {
-        // Construct full URL for pattern matching
-        let fullURLString: String
-        if path.hasPrefix("http://") || path.hasPrefix("https://") {
-            fullURLString = path
-        } else {
-            fullURLString = "\(baseURL)/\(path.hasPrefix("/") ? String(path.dropFirst()) : path)"
-        }
-        
-        guard let url = URL(string: fullURLString) else {
-            throw FetcherError.invalidURL(fullURLString)
-        }
-        
-        // Use pattern registry for intelligent routing
-        guard let (jsonPath, handler) = patternRegistry.resolveJSONPath(for: url) else {
-            throw FetcherError.invalidURL("No pattern handler found for: \(fullURLString)")
-        }
+        let route = try resolveRoute(path: path)
         
         // Check for Table of Contents pages (different schema)
-        if case .tableOfContents = handler.responseType {
+        if case .tableOfContents = route.responseType {
             throw FetcherError.tableOfContentsPage(
                 "This is a Table of Contents page. Use a specific article path instead. " +
                 "Example: /design/human-interface-guidelines/color"
@@ -87,33 +78,61 @@ public class DocCJSONFetcher {
         }
         
         // Special handling for GitHub repo URLs that need resolution
-        if jsonPath.hasPrefix("__github_repo__/") {
+        if route.jsonURL.contains("/__github_repo__/") {
+            let jsonPath = route.jsonURL
+                .replacingOccurrences(of: "https://github.com/", with: "")
+                .replacingOccurrences(of: "http://github.com/", with: "")
+                .replacingOccurrences(of: ".json", with: "")
             return try await resolveGitHubRepoDocumentation(jsonPath: jsonPath)
         }
-        
-        // Construct final URL
+
+        do {
+            return try await performRequest(url: route.jsonURL)
+        } catch let error as FetcherError {
+            // Fallback for generic sites
+            if case .notFound = error, route.handlerIdentifier == "generic.docc" {
+                guard let originalURL = URL(string: route.sourceURL) else {
+                    throw FetcherError.invalidURL(route.sourceURL)
+                }
+                return try await attemptGenericFallback(originalURL: originalURL)
+            }
+            throw error
+        }
+    }
+
+    /// Resolve source path to canonical source URL and JSON endpoint without fetching.
+    public func resolveRoute(path: String) throws -> ResolvedRoute {
+        let fullURLString: String
+        if path.hasPrefix("http://") || path.hasPrefix("https://") {
+            fullURLString = path
+        } else {
+            fullURLString = "\(baseURL)/\(path.hasPrefix("/") ? String(path.dropFirst()) : path)"
+        }
+
+        guard let url = URL(string: fullURLString) else {
+            throw FetcherError.invalidURL(fullURLString)
+        }
+
+        guard let (jsonPath, handler) = patternRegistry.resolveJSONPath(for: url) else {
+            throw FetcherError.invalidURL("No pattern handler found for: \(fullURLString)")
+        }
+
         var finalPath = jsonPath
         if !finalPath.hasSuffix(".json") {
             finalPath += ".json"
         }
-        
-        guard let baseURLComponents = URLComponents(string: fullURLString),
-              let host = baseURLComponents.host,
-              let scheme = baseURLComponents.scheme else {
+
+        guard let host = url.host, let scheme = url.scheme else {
             throw FetcherError.invalidURL(fullURLString)
         }
-        
-        let finalURL = "\(scheme)://\(host)/\(finalPath)"
-        
-        do {
-            return try await performRequest(url: finalURL)
-        } catch let error as FetcherError {
-            // Fallback for generic sites
-            if case .notFound = error, handler.identifier == "generic.docc" {
-                return try await attemptGenericFallback(originalURL: url)
-            }
-            throw error
-        }
+
+        let jsonURL = "\(scheme)://\(host)/\(finalPath)"
+        return ResolvedRoute(
+            sourceURL: fullURLString,
+            jsonURL: jsonURL,
+            handlerIdentifier: handler.identifier,
+            responseType: handler.responseType
+        )
     }
     
     /// Resolve GitHub repo URL to actual DocC documentation
@@ -444,4 +463,3 @@ public class DocCJSONFetcher {
         }
     }
 }
-

@@ -22,7 +22,7 @@ public protocol URLPatternHandler {
 }
 
 /// Types of responses that patterns can return
-public enum PatternResponseType {
+public enum PatternResponseType: Sendable {
     case renderNode       // Standard DocCRenderNode
     case tableOfContents  // TOC/Index page (different schema)
     case searchIndex      // Search index data

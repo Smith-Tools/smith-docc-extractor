@@ -17,11 +17,12 @@ struct SmithDoccExtractorCLI: AsyncParsableCommand {
           smith-doc-inspector docs https://developer.apple.com/documentation/swiftui
           smith-doc-inspector docs https://github.com/apple/swift-nio
           smith-doc-inspector docs /path/to/local/project
+          smith-doc-inspector resolve https://developer.apple.com/documentation/realitykit/modelcomponent
           smith-doc-inspector list                    # List project dependencies with doc status
           smith-doc-inspector examples swift-nio      # Find code examples
         """,
         version: "2.0.0",
-        subcommands: [Docs.self, List.self, Examples.self],
+        subcommands: [Docs.self, Resolve.self, List.self, Examples.self],
         defaultSubcommand: Docs.self
     )
 }
@@ -31,6 +32,17 @@ struct SmithDoccExtractorCLI: AsyncParsableCommand {
 enum OutputFormat: String, CaseIterable, ExpressibleByArgument {
     case json
     case text
+}
+
+private extension PatternResponseType {
+    var label: String {
+        switch self {
+        case .renderNode: return "renderNode"
+        case .tableOfContents: return "tableOfContents"
+        case .searchIndex: return "searchIndex"
+        case .custom(let value): return "custom(\(value))"
+        }
+    }
 }
 
 // MARK: - Docs Command (previously Extract)
@@ -215,6 +227,96 @@ struct Docs: AsyncParsableCommand {
     private func normalizeURL(_ input: String) -> String {
         var url = input
         if !url.lowercased().hasPrefix("http") {
+            url = "https://" + url
+        }
+        return url
+    }
+}
+
+// MARK: - Resolve Command
+
+struct Resolve: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Resolve DocC source URLs to concrete JSON endpoints without fetching content"
+    )
+
+    @Argument(help: "One or more URLs/paths to resolve")
+    var sources: [String] = []
+
+    @Option(help: "Read additional sources from a newline-separated file")
+    var fromFile: String?
+
+    @Option(help: "Output format (json, text)")
+    var format: OutputFormat = .text
+
+    mutating func run() async throws {
+        var inputs = sources
+
+        if let fromFile {
+            let expanded = NSString(string: fromFile).expandingTildeInPath
+            let content = try String(contentsOfFile: expanded, encoding: .utf8)
+            let fileSources = content
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+            inputs.append(contentsOf: fileSources)
+        }
+
+        if inputs.isEmpty {
+            print("Error: Provide at least one source argument or --from-file")
+            throw ExitCode.validationFailure
+        }
+
+        let fetcher = DocCJSONFetcher()
+        var resolvedRows: [[String: String]] = []
+
+        for input in inputs {
+            do {
+                let route = try fetcher.resolveRoute(path: normalizeURL(input))
+                resolvedRows.append([
+                    "input": input,
+                    "source_url": route.sourceURL,
+                    "json_url": route.jsonURL,
+                    "handler": route.handlerIdentifier,
+                    "response_type": route.responseType.label,
+                    "status": "ok"
+                ])
+            } catch {
+                resolvedRows.append([
+                    "input": input,
+                    "status": "error",
+                    "error": error.localizedDescription
+                ])
+            }
+        }
+
+        switch format {
+        case .json:
+            if let data = try? JSONSerialization.data(withJSONObject: resolvedRows, options: [.prettyPrinted, .sortedKeys]),
+               let json = String(data: data, encoding: .utf8) {
+                print(json)
+            }
+        case .text:
+            for row in resolvedRows {
+                if row["status"] == "ok" {
+                    print("✅ \(row["input"] ?? "")")
+                    print("   source: \(row["source_url"] ?? "")")
+                    print("   json:   \(row["json_url"] ?? "")")
+                    print("   route:  \(row["handler"] ?? "") · \(row["response_type"] ?? "")")
+                } else {
+                    print("❌ \(row["input"] ?? "")")
+                    print("   \(row["error"] ?? "Unknown error")")
+                }
+            }
+        }
+    }
+
+    private func normalizeURL(_ input: String) -> String {
+        var url = input
+        if !url.lowercased().hasPrefix("http"),
+           !url.hasPrefix("/"),
+           !url.hasPrefix("./"),
+           !url.hasPrefix("~/") {
             url = "https://" + url
         }
         return url

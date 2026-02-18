@@ -40,6 +40,12 @@ swift build -c release
 # Fetch DocC content to JSON (default)
 smith-doc-inspector docs https://developer.apple.com/documentation/swiftui
 
+# Resolve source URL to exact DocC JSON endpoint (no content fetch)
+smith-doc-inspector resolve https://developer.apple.com/documentation/realitykit/modelcomponent
+
+# Batch-resolve from a file
+smith-doc-inspector resolve --from-file sources.txt --format json
+
 # Fetch DocC content as plain text summary
 smith-doc-inspector docs https://developer.apple.com/documentation/swiftui --format text
 
